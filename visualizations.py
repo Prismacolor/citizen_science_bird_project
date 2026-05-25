@@ -1,31 +1,39 @@
 """
-Visualizations
+Script 3 — Visualizations
 --------------------------
-Reads analysis CSVs from analysis script and produces publication-quality
-charts saved as high-resolution PNGs.
+Reads analysis CSVs from Script 2 and produces publication-quality
+charts saved as high-resolution PNGs ready for PowerPoint.
+
+Species-agnostic: reads species names from the data, auto-assigns
+colors, and adjusts subplot layouts dynamically.
 
 Outputs saved to ./figures/:
-    habitat_by_species.png       — % sightings per habitat, side by side
-    habitat_by_season.png        — habitat use shifts across seasons
-    seasonal_detection_rate.png  — monthly detection rates (effort-corrected)
-    hotspot_density_map.png      — lat/lon hexbin of vulture detections
-    coverage_gap_map.png         — observed / water / no data grid
-    underbirded_counties.png     — bar chart of lowest-coverage counties
-    landscape_change_pie.png     — stable vs changed landscape split
-    change_by_species.png        — change type breakdown per species
-    change_by_habitat.png        — which habitats are shifting
+    01_habitat_by_species.png       — % sightings per habitat, side by side
+    02_habitat_by_season.png        — habitat use shifts across seasons
+    03_seasonal_detection_rate.png  — monthly detection rates (effort-corrected)
+    04_hotspot_density_map.png      — lat/lon hexbin of detections
+    05_coverage_gap_map.png         — observed / water / no data grid
+    06_underbirded_counties.png     — bar chart of lowest-coverage counties
+    07_landscape_change_pie.png     — stable vs changed landscape split
+    08_change_by_species.png        — change type breakdown per species
+    09_change_by_habitat.png        — which habitats are shifting
 
+Requirements:
+    pip install pandas matplotlib seaborn numpy
 """
 
 import os
 import warnings
+
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 
 warnings.filterwarnings("ignore")
 
+# ── CONFIG ────────────────────────────────────────────────────────────────────
 
 ANALYSIS_FOLDER = "./analysis_results"
 FIGURES_FOLDER  = "./figures"
@@ -33,12 +41,29 @@ ENRICHED_PATH   = "./data/vulture_sightings_with_habitat.csv"
 
 os.makedirs(FIGURES_FOLDER, exist_ok=True)
 
+# ── STYLE ─────────────────────────────────────────────────────────────────────
+# Species colors are assigned dynamically from this pool.
+# First species gets index 0, second gets index 1, etc.
 
-# set up
-PALETTE = {
-    "Black Vulture":  "#2C2C2C",
-    "Turkey Vulture": "#C0392B",
-}
+SPECIES_COLOR_POOL = [
+    "#2C2C2C",  # dark charcoal
+    "#C0392B",  # crimson
+    "#2980B9",  # steel blue
+    "#27AE60",  # emerald
+    "#8E44AD",  # purple
+    "#D35400",  # burnt orange
+    "#16A085",  # teal
+    "#F39C12",  # amber
+]
+
+
+def _get_species_colors(species_list: list[str]) -> dict[str, str]:
+    """Assign a color to each species from the pool."""
+    return {
+        species: SPECIES_COLOR_POOL[i % len(SPECIES_COLOR_POOL)]
+        for i, species in enumerate(sorted(species_list))
+    }
+
 
 SEASON_COLORS = {
     "Spring": "#27AE60", "Summer": "#F39C12",
@@ -80,20 +105,28 @@ def save(fig, name: str):
     print(f"  Saved: {path}")
 
 
+# Habitat Percentage by Species
 def fig_habitat_by_species():
     df = pd.read_csv(os.path.join(ANALYSIS_FOLDER, "habitat_pct.csv"))
+    species_list = sorted(df["COMMON NAME"].unique())
+    n = len(species_list)
+    palette = _get_species_colors(species_list)
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
-    fig.suptitle("Habitat Use: Black Vulture vs Turkey Vulture", **FONT_TITLE, y=1.02)
+    fig, axes = plt.subplots(1, n, figsize=(7 * n, 6), sharey=True)
+    if n == 1:
+        axes = [axes]
 
-    for ax, (species, grp) in zip(axes, df.groupby("COMMON NAME")):
-        grp = grp.sort_values("PCT", ascending=True)
+    title = " vs ".join(species_list) if n <= 3 else "Habitat Use by Species"
+    fig.suptitle(f"Habitat Use: {title}", **FONT_TITLE, y=1.02)
+
+    for ax, species in zip(axes, species_list):
+        grp = df[df["COMMON NAME"] == species].sort_values("PCT", ascending=True)
         bars = ax.barh(grp["HABITAT_GROUP"], grp["PCT"], color="#5DADE2", edgecolor="white", linewidth=0.5)
         for bar, pct in zip(bars, grp["PCT"]):
             ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2,
                     f"{pct:.1f}%", va="center", **FONT_LABEL)
-        ax.set_title(str(species), fontsize=13, fontweight="bold",
-                     color=PALETTE.get(str(species), "#333333"))
+        ax.set_title(species, fontsize=13, fontweight="bold",
+                     color=palette.get(species, "#333333"))
         ax.set_xlabel("% of Sightings", **FONT_LABEL)
         ax.tick_params(**FONT_TICK)
         ax.set_xlim(0, grp["PCT"].max() + 12)
@@ -102,13 +135,16 @@ def fig_habitat_by_species():
     save(fig, "habitat_by_species.png")
 
 
+# Habitat by Season Heatmap
 def fig_habitat_by_season():
     df = pd.read_csv(os.path.join(ANALYSIS_FOLDER, "habitat_by_season.csv"))
     season_order = ["Spring", "Summer", "Fall", "Winter"]
-    species_list = df["COMMON NAME"].unique()
+    species_list = sorted(df["COMMON NAME"].unique())
+    n = len(species_list)
+    palette = _get_species_colors(species_list)
 
-    fig, axes = plt.subplots(1, len(species_list), figsize=(16, 6))
-    if len(species_list) == 1:
+    fig, axes = plt.subplots(1, n, figsize=(8 * n, 6))
+    if n == 1:
         axes = [axes]
     fig.suptitle("Habitat Use by Season", **FONT_TITLE, y=1.02)
 
@@ -122,8 +158,8 @@ def fig_habitat_by_season():
                     linewidths=0.5, linecolor="white",
                     cbar_kws={"label": "% of Sightings", "shrink": 0.7},
                     annot_kws={"size": 9})
-        ax.set_title(str(species), fontsize=13, fontweight="bold",
-                     color=PALETTE.get(str(species), "#333333"))
+        ax.set_title(species, fontsize=13, fontweight="bold",
+                     color=palette.get(species, "#333333"))
         ax.set_xlabel("")
         ax.set_ylabel("Habitat Type", **FONT_LABEL)
         ax.tick_params(**FONT_TICK)
@@ -132,15 +168,20 @@ def fig_habitat_by_season():
     save(fig, "habitat_by_season.png")
 
 
+# Seasonal Detection Rate
+
 def fig_seasonal_detection_rate():
     df = pd.read_csv(os.path.join(ANALYSIS_FOLDER, "seasonal_counts.csv"))
     month_order = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     df["MONTH_NAME"] = pd.Categorical(df["MONTH_NAME"], categories=month_order, ordered=True)
     df = df.sort_values("MONTH_NAME")
 
+    species_list = sorted(df["COMMON NAME"].unique())
+    palette = _get_species_colors(species_list)
+
     fig, ax = plt.subplots(figsize=(13, 6))
     for species, grp in df.groupby("COMMON NAME"):
-        color = PALETTE.get(str(species), "#555555")
+        color = palette.get(str(species), "#555555")
         ax.plot(grp["MONTH_NAME"], grp["DETECTION_RATE"],
                 marker="o", linewidth=2.5, markersize=7, color=color, label=species)
         ax.fill_between(grp["MONTH_NAME"], grp["DETECTION_RATE"], alpha=0.1, color=color)
@@ -164,23 +205,37 @@ def fig_seasonal_detection_rate():
     save(fig, "seasonal_detection_rate.png")
 
 
+# Hotspot Density Map
 def fig_hotspot_density_map():
     if not os.path.exists(ENRICHED_PATH):
         print("  Enriched CSV not found — skipping hotspot map.")
         return
 
     raw = pd.read_csv(ENRICHED_PATH, usecols=["COMMON NAME", "LATITUDE", "LONGITUDE"])
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-    fig.suptitle("Vulture Detection Hotspots — TX, AR, OK, LA", **FONT_TITLE, y=1.01)
+    species_list = sorted(raw["COMMON NAME"].unique())
+    n = len(species_list)
+    palette = _get_species_colors(species_list)
 
-    for ax, species in zip(axes, ["Black Vulture", "Turkey Vulture"]):
+    # Auto-detect map bounds from the data with a small pad
+    lat_pad = (raw["LATITUDE"].max() - raw["LATITUDE"].min()) * 0.05
+    lon_pad = (raw["LONGITUDE"].max() - raw["LONGITUDE"].min()) * 0.05
+    xlim = (raw["LONGITUDE"].min() - lon_pad, raw["LONGITUDE"].max() + lon_pad)
+    ylim = (raw["LATITUDE"].min() - lat_pad, raw["LATITUDE"].max() + lat_pad)
+
+    fig, axes = plt.subplots(1, n, figsize=(8 * n, 8))
+    if n == 1:
+        axes = [axes]
+    fig.suptitle("Detection Hotspots", **FONT_TITLE, y=1.01)
+
+    for ax, species in zip(axes, species_list):
         sub = raw[raw["COMMON NAME"] == species]
         hb = ax.hexbin(sub["LONGITUDE"], sub["LATITUDE"], gridsize=60, cmap="YlOrRd",
                        mincnt=1, linewidths=0.2)
         fig.colorbar(hb, ax=ax, shrink=0.7).set_label("Detections per cell", fontsize=9)
-        ax.set_xlim(-106.6, -88.8)
-        ax.set_ylim(25.8, 36.5)
-        ax.set_title(species, fontsize=13, fontweight="bold", color=PALETTE.get(species, "#333"))
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        ax.set_title(species, fontsize=13, fontweight="bold",
+                     color=palette.get(species, "#333333"))
         ax.set_xlabel("Longitude", **FONT_LABEL)
         ax.set_ylabel("Latitude", **FONT_LABEL)
         ax.tick_params(**FONT_TICK)
@@ -189,9 +244,14 @@ def fig_hotspot_density_map():
     save(fig, "hotspot_density_map.png")
 
 
+# Coverage Gap Map
 def fig_coverage_gap_map():
     df = pd.read_csv(os.path.join(ANALYSIS_FOLDER, "grid_coverage.csv"))
     status_colors = {"Observed": "#27AE60", "No Data": "#E8E8E8", "Open Water": "#5DADE2"}
+
+    # Auto-detect bounds from the grid
+    xlim = (df["GRID_LON"].min() - 0.5, df["GRID_LON"].max() + 0.5)
+    ylim = (df["GRID_LAT"].min() - 0.5, df["GRID_LAT"].max() + 0.5)
 
     fig, ax = plt.subplots(figsize=(13, 9))
     fig.suptitle("Where Do We Have Data? Identifying Coverage Gaps", **FONT_TITLE)
@@ -205,21 +265,27 @@ def fig_coverage_gap_map():
               title="Cell Status", title_fontsize=10)
     ax.set_xlabel("Longitude", **FONT_LABEL)
     ax.set_ylabel("Latitude", **FONT_LABEL)
-    ax.set_xlim(-106.6, -88.8)
-    ax.set_ylim(25.8, 36.5)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
     ax.tick_params(**FONT_TICK)
-    ax.text(-106.4, 26.3, "Grey = No Data ≠ Absence\nBlue = Open Water (expected absence)",
+    ax.text(xlim[0] + 0.2, ylim[0] + 0.3,
+            "Grey = No Data ≠ Absence\nBlue = Open Water (expected absence)",
             fontsize=8.5, color="#333333",
             bbox=dict(boxstyle="round,pad=0.5", facecolor="white", edgecolor="#CCCCCC", alpha=0.9))
     fig.tight_layout()
     save(fig, "coverage_gap_map.png")
 
 
+# Underbirded Counties
 def fig_underbirded_counties():
     df = pd.read_csv(os.path.join(ANALYSIS_FOLDER, "underbirded_counties.csv"))
     df = df.sort_values("TOTAL_CHECKLISTS").head(25)
     df["LABEL"] = df["COUNTY"] + ", " + df["STATE"]
-    state_colors = {"Texas": "#C0392B", "Oklahoma": "#2980B9", "Arkansas": "#27AE60", "Louisiana": "#8E44AD"}
+
+    # Auto-assign colors per state
+    states = sorted(df["STATE"].unique())
+    state_pool = ["#C0392B", "#2980B9", "#27AE60", "#8E44AD", "#D35400", "#16A085", "#F39C12", "#2C3E50"]
+    state_colors = {s: state_pool[i % len(state_pool)] for i, s in enumerate(states)}
     colors = [state_colors.get(s, "#999999") for s in df["STATE"]]
 
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -237,6 +303,7 @@ def fig_underbirded_counties():
     save(fig, "underbirded_counties.png")
 
 
+# Landscape Change Pie
 def fig_landscape_change_pie():
     df = pd.read_csv(os.path.join(ANALYSIS_FOLDER, "landscape_change.csv"))
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -247,11 +314,12 @@ def fig_landscape_change_pie():
     for at in autotexts:
         at.set_fontweight("bold")
         at.set_color("white")
-    ax.set_title("Vulture Sightings: Stable vs Shifting Landscapes", **FONT_TITLE)
+    ax.set_title("Sightings: Stable vs Shifting Landscapes", **FONT_TITLE)
     fig.tight_layout()
     save(fig, "landscape_change_pie.png")
 
 
+# Change Type by Species
 def fig_change_by_species():
     df = pd.read_csv(os.path.join(ANALYSIS_FOLDER, "change_by_species.csv"))
     changed = df[df["CHANGE_TYPE"] != "Stable"]
@@ -259,19 +327,25 @@ def fig_change_by_species():
         print("  No change data — skipping change_by_species chart.")
         return
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+    species_list = sorted(changed["COMMON NAME"].unique())
+    n = len(species_list)
+    palette = _get_species_colors(species_list)
+
+    fig, axes = plt.subplots(1, n, figsize=(7 * n, 6), sharey=True)
+    if n == 1:
+        axes = [axes]
     fig.suptitle("What Kind of Landscape Change?", **FONT_TITLE, y=1.02)
 
-    for ax, (species, grp) in zip(axes, changed.groupby("COMMON NAME")):
-        grp = grp.sort_values("COUNT", ascending=True)
+    for ax, species in zip(axes, species_list):
+        grp = changed[changed["COMMON NAME"] == species].sort_values("COUNT", ascending=True)
         colors = [CHANGE_COLORS.get(ct, "#999999") for ct in grp["CHANGE_TYPE"]]
         bars = ax.barh(grp["CHANGE_TYPE"], grp["COUNT"], color=colors, edgecolor="white")
         for bar, count in zip(bars, grp["COUNT"]):
             ax.text(bar.get_width() + max(grp["COUNT"]) * 0.02,
                     bar.get_y() + bar.get_height() / 2,
                     f"{count:,}", va="center", fontsize=10)
-        ax.set_title(str(species), fontsize=13, fontweight="bold",
-                     color=PALETTE.get(str(species), "#333333"))
+        ax.set_title(species, fontsize=13, fontweight="bold",
+                     color=palette.get(species, "#333333"))
         ax.set_xlabel("Number of Sightings", **FONT_LABEL)
         ax.tick_params(**FONT_TICK)
 
@@ -279,6 +353,7 @@ def fig_change_by_species():
     save(fig, "change_by_species.png")
 
 
+# Change × Habitat Heatmap
 def fig_change_by_habitat():
     path = os.path.join(ANALYSIS_FOLDER, "change_by_habitat.csv")
     if not os.path.exists(path):
@@ -299,7 +374,7 @@ def fig_change_by_habitat():
     ax.set_ylabel("Habitat", **FONT_LABEL)
     ax.tick_params(**FONT_TICK)
     fig.tight_layout()
-    save(fig, "09_change_by_habitat.png")
+    save(fig, "change_by_habitat.png")
 
 
 def main():
