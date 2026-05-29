@@ -1,5 +1,5 @@
 """
-test_bird_project.py — Tests for eBird Vulture Analysis
+test_main_project.py — Tests for eBird Vulture Analysis
 -----------------------------------------------------------
 Tests the actual functions in data_extraction and sightings_analysis
 by calling them with a sample DataFrame and checking the results.
@@ -8,7 +8,7 @@ I/O is mocked:
   - raster_lookup is patched so no TIF files are needed
   - _save is patched so no CSVs are written to disk
 
-Run from project root:  pytest tests/test_bird_project.py -v
+Run from project root:  pytest tests/test_main_project.py -v
 """
 
 import importlib
