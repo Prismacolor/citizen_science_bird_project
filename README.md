@@ -1,10 +1,11 @@
 # Citizen Science Bird Project
 
 ## What This Is
+This project was done in support of the Blackland Prairie Raptor Center and is designed to show the power of citizen science and how it can create a foundation for serious research and analysis. 
 
 Two vulture species — Black Vulture and Turkey Vulture — share the same scavenging job across Texas, Arkansas, Oklahoma, and Louisiana. But they don't use the landscape the same way. This project uses millions of birdwatcher observations from [eBird](https://ebird.org) to figure out where each species hangs out, what kind of habitat they prefer, and whether the landscapes they depend on are changing.
 
-We also discovered something unexpected: a huge number of vulture sightings fall in areas classified as "open water." So we built a second analysis focused on the Gulf Coast to find out what's really going on — and it turns out vultures are using salt marshes, tidal flats, and beaches that standard land cover maps don't capture well.
+I also discovered something unexpected: a huge number of vulture sightings fall in areas classified as "open water." So I built a second analysis focused on the Gulf Coast to find out what's really going on — and it turns out vultures are using salt marshes, tidal flats, and beaches that standard land cover maps don't capture well.
 
 ## Key Findings
 
